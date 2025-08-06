@@ -10,6 +10,7 @@ async function showSuggestions() {
   clearTimeout(debounceTimeout);
 
   debounceTimeout = setTimeout(async () => {
+    let year = $("#selectedYear").val().trim();
     let input = $("#placeholderInput").val().trim();
     let token = $("#apiToken").val().trim();
     let suggestionsList = $("#suggestions");
@@ -20,7 +21,8 @@ async function showSuggestions() {
 
     try {
       const response = await fetch(
-        `https://localhost:8081/api/Suggestion/Query?year=2024&query=${encodeURIComponent(input)}`,
+        // `https://localhost:8081/api/Suggestion/Query?year=${year}&query=${encodeURIComponent(input)}`,
+        `https://report-api.ueh.edu.vn/api/Suggestion/Query?year=${year}&query=${encodeURIComponent(input)}`,
         {
           method: "GET",
           headers: {
