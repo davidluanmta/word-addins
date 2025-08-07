@@ -82,11 +82,11 @@
       </bt:Urls>
       <bt:ShortStrings>
         <bt:String id="GetStarted.Title" DefaultValue="UEH - Report"/>
-        <bt:String id="CommandsGroup.Label" DefaultValue="Nhóm công cụ"/>
-        <bt:String id="TaskpaneButton.Label" DefaultValue="Mở báo cáo"/>
+        <bt:String id="CommandsGroup.Label" DefaultValue="Tool tạo báo cáo"/>
+        <bt:String id="TaskpaneButton.Label" DefaultValue="UEH - Report"/>
       </bt:ShortStrings>
       <bt:LongStrings>
-        <bt:String id="GetStarted.Description" DefaultValue="Add-in hỗ trợ tạo báo cáo bảng xếp hạng cho Word. Nhấn 'Mở báo cáo' trong tab HOME để bắt đầu."/>
+        <bt:String id="GetStarted.Description" DefaultValue="Add-in hỗ trợ tạo báo cáo bảng xếp hạng cho Word. Nhấn 'UEH - Report' trong tab HOME để bắt đầu."/>
         <bt:String id="TaskpaneButton.Tooltip" DefaultValue="Nhấn để mở bảng tạo báo cáo"/>
       </bt:LongStrings>
     </Resources>
