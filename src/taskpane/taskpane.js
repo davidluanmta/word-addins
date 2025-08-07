@@ -134,13 +134,12 @@ async function getSelectedFromApi(ids) {
 async function fillAllPlaceholdersBatch(callApi) {
   await Word.run(async (context) => {
     const body = context.document.body;
-
     $("#notification-body").html("Đang xử lý dữ liệu, vui lòng chờ...");
 
     body.load("text");
     await context.sync();
-
     const fullText = body.text;
+
     const regex = /\{\{(\d+)_([\w.]+)(?:\s*\[(.*?)\])?\}\}/g;
     const matches = Array.from(fullText.matchAll(regex));
 
@@ -164,54 +163,51 @@ async function fillAllPlaceholdersBatch(callApi) {
       const value = dataMap[id];
       if (!value) continue;
 
-      const results = body.search(full, { matchCase: false, matchWholeWord: false });
+      const results = body.search(full, {
+        matchCase: false,
+        matchWholeWord: false,
+      });
       context.load(results, "items");
       await context.sync();
 
       if (results.items.length === 0) continue;
+
       const range = results.items[0];
 
       if (Array.isArray(value)) {
-        if (value.length === 0) continue;
-
-        // Determine columns
-        const cols = columns && columns.length > 0 ? columns : Object.keys(value[0] || {});
-        if (cols.length === 0) continue;
-
-        const tableValues = [cols];
-
-        for (const row of value) {
-          const rowValues = cols.map((col) => (row[col] !== undefined && row[col] !== null ? row[col].toString() : ""));
-          tableValues.push(rowValues);
-        }
-
-        const rowCount = tableValues.length;
-        const colCount = cols.length;
-
-        // Ensure every row has correct column length
-        const allRowsValid = tableValues.every((row) => row.length === colCount);
-        if (!allRowsValid) {
-          console.error("❌ Dữ liệu không đồng đều số cột:", tableValues);
+        if (value.length === 0) {
+          range.insertText("", Word.InsertLocation.replace);
+          await context.sync();
           continue;
         }
 
-        try {
-          range.insertTable(rowCount, colCount, Word.InsertLocation.replace, tableValues);
-          await context.sync();
-        } catch (e) {
-          console.error("❌ Lỗi khi insert table:", full, e, {
-            rowCount,
-            colCount,
-            tableValues,
-          });
+        const cols = columns && columns.length > 0 ? columns : Object.keys(value[0]);
+        if (cols.length === 0) continue;
+
+        // Build string-based table
+        let tableText = "";
+
+        // Header
+        tableText += cols.join("\t") + "\n";
+
+        // Rows
+        for (const row of value) {
+          const rowText = cols
+            .map((col) => {
+              const val = row[col];
+              return val === null || val === undefined ? "" : val.toString();
+            })
+            .join("\t");
+          tableText += rowText + "\n";
         }
+
+        // Insert as plain text (replace placeholder)
+        range.insertText(tableText.trim(), Word.InsertLocation.replace);
+        await context.sync();
       } else {
-        try {
-          range.insertText(value.toString(), Word.InsertLocation.replace);
-          await context.sync();
-        } catch (e) {
-          console.error("❌ Lỗi khi insert text:", full, e);
-        }
+        const display = value === null || value === undefined ? "" : value.toString();
+        range.insertText(display, Word.InsertLocation.replace);
+        await context.sync();
       }
     }
 
