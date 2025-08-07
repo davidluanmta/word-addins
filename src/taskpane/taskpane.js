@@ -176,7 +176,7 @@ async function fillAllPlaceholdersBatch(callApi) {
 
       if (Array.isArray(value)) {
         if (value.length === 0) {
-          range.insertText("", Word.InsertLocation.replace);
+          range.insertHtml("<p>Không có dữ liệu</p>", Word.InsertLocation.replace);
           await context.sync();
           continue;
         }
@@ -184,25 +184,31 @@ async function fillAllPlaceholdersBatch(callApi) {
         const cols = columns && columns.length > 0 ? columns : Object.keys(value[0]);
         if (cols.length === 0) continue;
 
-        // Build string-based table
-        let tableText = "";
+        // Build HTML table
+        let html = `
+          <table border="1" style="border-collapse: collapse; width: 100%;">
+            <thead>
+              <tr>
+                ${cols.map((col) => `<th style="padding: 4px; text-align: left;">${col}</th>`).join("")}
+              </tr>
+            </thead>
+            <tbody>
+              ${value
+                .map((row) => {
+                  return `<tr>
+                    ${cols
+                      .map((col) => {
+                        const cell = row[col];
+                        return `<td style="padding: 4px;">${cell ?? ""}</td>`;
+                      })
+                      .join("")}
+                  </tr>`;
+                })
+                .join("")}
+            </tbody>
+          </table>`;
 
-        // Header
-        tableText += cols.join("\t") + "\n";
-
-        // Rows
-        for (const row of value) {
-          const rowText = cols
-            .map((col) => {
-              const val = row[col];
-              return val === null || val === undefined ? "" : val.toString();
-            })
-            .join("\t");
-          tableText += rowText + "\n";
-        }
-
-        // Insert as plain text (replace placeholder)
-        range.insertText(tableText.trim(), Word.InsertLocation.replace);
+        range.insertHtml(html, Word.InsertLocation.replace);
         await context.sync();
       } else {
         const display = value === null || value === undefined ? "" : value.toString();
