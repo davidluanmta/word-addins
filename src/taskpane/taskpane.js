@@ -167,39 +167,36 @@ async function fillAllPlaceholdersBatch(callApi) {
       const value = dataMap[id];
       if (!value) continue;
 
-      let html = "";
-
-      if (Array.isArray(value)) {
-        // Value is a table
-        const cols = columns || Object.keys(value[0] || {});
-        html = "<table border='1'><tr>";
-        cols.forEach((col) => {
-          html += `<th>${col}</th>`;
-        });
-        html += "</tr>";
-
-        value.forEach((row) => {
-          html += "<tr>";
-          cols.forEach((col) => {
-            html += `<td>${row[col] ?? ""}</td>`;
-          });
-          html += "</tr>";
-        });
-
-        html += "</table>";
-      } else {
-        // Value is plain text
-        html = `<p>${value}</p>`;
-      }
-
       const results = body.search(full, { matchCase: false, matchWholeWord: false });
       context.load(results, "items");
       await context.sync();
 
-      if (results.items.length > 0) {
-        results.items[0].insertHtml(html, Word.InsertLocation.replace);
-        await context.sync();
+      if (results.items.length === 0) continue;
+
+      const range = results.items[0];
+
+      if (Array.isArray(value)) {
+        // Table replacement
+        const rows = [];
+        const cols = columns || (value.length > 0 ? Object.keys(value[0]) : []);
+
+        // Add header row
+        rows.push(cols.map((col) => col));
+
+        // Add data rows
+        for (const row of value) {
+          rows.push(cols.map((col) => row[col] ?? ""));
+        }
+
+        // Insert table
+        const table = range.insertTable(rows.length, cols.length, Word.InsertLocation.replace, rows);
+        table.styleBuiltIn = Word.BuiltInStyle.gridTable5Dark_Accent1;
+      } else {
+        // Plain text
+        range.insertText(value.toString(), Word.InsertLocation.replace);
       }
+
+      await context.sync();
     }
     $("#notification-body").html("");
   });
