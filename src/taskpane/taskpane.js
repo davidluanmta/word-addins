@@ -132,82 +132,88 @@ async function getSelectedFromApi(ids) {
   return {};
 }
 async function fillAllPlaceholdersBatch(callApi) {
-  await Word.run(async (context) => {
-    const body = context.document.body;
-    // Step 1: Insert "Đang xử lý..." message at the beginning
-    $("#notification-body").html("Đang xử lý dữ liệu, vui lòng chờ...");
-    // Step 2: Load document text and find placeholders
-    body.load("text");
-    await context.sync();
-    const fullText = body.text;
-
-    // Match patterns like: {{1718_HopDongGiangVien["Stt","HoVaTen"]}} or {{1710_SoLuongGiangVien}}
-    const regex = /\{\{(\d+)_([\w.]+)(?:\s*\[(.*?)\])?\}\}/g;
-    const matches = Array.from(fullText.matchAll(regex));
-
-    const placeholders = [];
-    const idsSet = new Set();
-
-    for (const match of matches) {
-      const full = match[0];
-      const id = match[1];
-      const rawCols = match[3];
-
-      const columns = rawCols ? rawCols.split(",").map((c) => c.trim().replace(/^"|"$/g, "")) : null;
-
-      placeholders.push({ full, id, columns });
-      idsSet.add(id);
-    }
-
-    const ids = Array.from(idsSet);
-    const dataMap = await callApi(ids); // Make single API call
-
-    //Step 3: Replace each placeholder
-    for (const { full, id, columns } of placeholders) {
-      const value = dataMap[id];
-      if (!value) {
-        continue;
-      }
-
-      const results = body.search(full, { matchCase: false, matchWholeWord: false });
-      context.load(results, "items");
+  try {
+    await Word.run(async (context) => {
+      const body = context.document.body;
+      // Step 1: Insert "Đang xử lý..." message at the beginning
+      $("#notification-body").html("Đang xử lý dữ liệu, vui lòng chờ...");
+      // Step 2: Load document text and find placeholders
+      body.load("text");
       await context.sync();
+      const fullText = body.text;
 
-      if (results.items.length === 0) {
-        continue;
+      // Match patterns like: {{1718_HopDongGiangVien["Stt","HoVaTen"]}} or {{1710_SoLuongGiangVien}}
+      const regex = /\{\{(\d+)_([\w.]+)(?:\s*\[(.*?)\])?\}\}/g;
+      const matches = Array.from(fullText.matchAll(regex));
+
+      const placeholders = [];
+      const idsSet = new Set();
+
+      for (const match of matches) {
+        const full = match[0];
+        const id = match[1];
+        const rawCols = match[3];
+
+        const columns = rawCols ? rawCols.split(",").map((c) => c.trim().replace(/^"|"$/g, "")) : null;
+
+        placeholders.push({ full, id, columns });
+        idsSet.add(id);
       }
 
-      const range = results.items[0];
+      const ids = Array.from(idsSet);
+      const dataMap = await callApi(ids); // Make single API call
 
-      if (Array.isArray(value)) {
-        // Value is a table
-        const cols = columns || Object.keys(value[0] || {});
-        const rowCount = value.length + 1; // +1 for header
-        const colCount = cols.length;
-
-        const table = range.insertTable(rowCount, colCount, Word.InsertLocation.replace, []);
-
-        // Header
-        for (let c = 0; c < colCount; c++) {
-          table.getCell(0, c).value = cols[c];
+      //Step 3: Replace each placeholder
+      for (const { full, id, columns } of placeholders) {
+        const value = dataMap[id];
+        if (!value) {
+          continue;
         }
 
-        // Data rows
-        for (let r = 0; r < value.length; r++) {
+        const results = body.search(full, { matchCase: false, matchWholeWord: false });
+        context.load(results, "items");
+        await context.sync();
+
+        if (results.items.length === 0) {
+          continue;
+        }
+
+        const range = results.items[0];
+
+        if (Array.isArray(value)) {
+          // Value is a table
+          const cols = columns || Object.keys(value[0] || {});
+          const rowCount = value.length + 1; // +1 for header
+          const colCount = cols.length;
+
+          const table = range.insertTable(rowCount, colCount, Word.InsertLocation.replace, []);
+
+          // Header
           for (let c = 0; c < colCount; c++) {
-            const cellValue = value[r][cols[c]] ?? "";
-            table.getCell(r + 1, c).value = cellValue.toString();
+            table.getCell(0, c).value = cols[c];
           }
-        }
-      } else {
-        // Plain text
-        range.insertText(value.toString(), Word.InsertLocation.replace);
-      }
 
-      await context.sync();
-    }
-    $("#notification-body").html("");
-  });
+          // Data rows
+          for (let r = 0; r < value.length; r++) {
+            for (let c = 0; c < colCount; c++) {
+              const cellValue = value[r][cols[c]] ?? "";
+              table.getCell(r + 1, c).value = cellValue.toString();
+            }
+          }
+        } else {
+          // Plain text
+          range.insertText(value.toString(), Word.InsertLocation.replace);
+        }
+
+        await context.sync();
+      }
+      $("#notification-body").html("");
+    });
+  } catch (error) {
+    console.error("Office Error:", error);
+    console.log("Debug Info:", error.debugInfo);
+    alert("Lỗi: " + error.message);
+  }
 }
 
 async function insertPlaceholder() {
