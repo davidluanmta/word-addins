@@ -135,14 +135,16 @@ async function fillAllPlaceholdersBatch(callApi) {
   try {
     await Word.run(async (context) => {
       const body = context.document.body;
-      // Step 1: Insert "Đang xử lý..." message at the beginning
+
+      // 1. Hiển thị thông báo
       $("#notification-body").html("Đang xử lý dữ liệu, vui lòng chờ...");
-      // Step 2: Load document text and find placeholders
+
+      // 2. Tải nội dung văn bản
       body.load("text");
       await context.sync();
       const fullText = body.text;
 
-      // Match patterns like: {{1718_HopDongGiangVien["Stt","HoVaTen"]}} or {{1710_SoLuongGiangVien}}
+      // 3. Tìm các placeholder dạng {{1718_HopDongGiangVien["Stt","HoVaTen"]}}
       const regex = /\{\{(\d+)_([\w.]+)(?:\s*\[(.*?)\])?\}\}/g;
       const matches = Array.from(fullText.matchAll(regex));
 
@@ -160,66 +162,57 @@ async function fillAllPlaceholdersBatch(callApi) {
         idsSet.add(id);
       }
 
-      const ids = Array.from(idsSet);
-      const dataMap = await callApi(ids); // Make single API call
+      if (placeholders.length === 0) {
+        $("#notification-body").html("Không tìm thấy dữ liệu cần thay thế.");
+        return;
+      }
 
-      //Step 3: Replace each placeholder
+      // 4. Gọi API lấy dữ liệu theo id
+      const ids = Array.from(idsSet);
+      const dataMap = await callApi(ids);
+
+      // 5. Thay thế từng placeholder
       for (const { full, id, columns } of placeholders) {
         const value = dataMap[id];
-        if (!value) {
-          continue;
-        }
+        if (!value) continue;
 
         const results = body.search(full, { matchCase: false, matchWholeWord: false });
         context.load(results, "items");
         await context.sync();
 
-        if (results.items.length === 0) {
-          continue;
-        }
+        if (results.items.length === 0) continue;
 
         const range = results.items[0];
 
+        // 6. Nếu là bảng
         if (Array.isArray(value)) {
-          // Là bảng
-          if (value.length === 0) {
-            range.insertText("(Không có dữ liệu)", Word.InsertLocation.replace);
-            continue;
-          }
+          const cols = columns && columns.length > 0 ? columns : Object.keys(value[0] || {});
 
-          const allKeys = Object.keys(value[0] || {});
-          const usedColumns = columns && columns.length > 0 ? columns : allKeys;
           const rowCount = value.length + 1;
-          const colCount = usedColumns.length;
+          const colCount = cols.length;
 
-          const table = range.insertTable(rowCount, colCount, Word.InsertLocation.replace);
-
-          // Header row
-          for (let c = 0; c < colCount; c++) {
-            table.getCell(0, c).value = usedColumns[c];
-          }
-
-          // Data rows
-          for (let r = 0; r < value.length; r++) {
-            const row = value[r];
-            for (let c = 0; c < colCount; c++) {
-              const cellValue = row[usedColumns[c]];
-              table.getCell(r + 1, c).value = cellValue != null ? cellValue.toString() : "";
-            }
+          if (rowCount > 1 && colCount > 0) {
+            const tableValues = [cols, ...value.map((row) => cols.map((col) => row[col] ?? ""))];
+            range.insertTable(rowCount, colCount, Word.InsertLocation.replace, tableValues);
+            await context.sync();
           }
         } else {
-          // Plain text
-          range.insertText(value.toString(), Word.InsertLocation.replace);
+          // 7. Nếu là chuỗi văn bản
+          range.insertHtml(`<p>${value}</p>`, Word.InsertLocation.replace);
+          await context.sync();
         }
-
-        await context.sync();
       }
+
+      // 8. Xóa thông báo
       $("#notification-body").html("");
     });
   } catch (error) {
-    console.error("Office Error:", error);
-    console.log("Debug Info:", error.debugInfo);
-    alert("Lỗi: " + error.message);
+    console.error("❌ Lỗi khi xử lý Word:", error);
+    if (error instanceof OfficeExtension.Error) {
+      console.error("📄 Chi tiết lỗi:", JSON.stringify(error.debugInfo, null, 2));
+      alert("Lỗi: " + error.message + "\nChi tiết: " + JSON.stringify(error.debugInfo, null, 2));
+    }
+    $("#notification-body").html("Đã xảy ra lỗi khi xử lý dữ liệu.");
   }
 }
 
