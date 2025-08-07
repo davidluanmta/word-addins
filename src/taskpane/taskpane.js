@@ -165,32 +165,41 @@ async function fillAllPlaceholdersBatch(callApi) {
     //Step 3: Replace each placeholder
     for (const { full, id, columns } of placeholders) {
       const value = dataMap[id];
-      if (!value) continue;
+      if (!value) {
+        continue;
+      }
 
       const results = body.search(full, { matchCase: false, matchWholeWord: false });
       context.load(results, "items");
       await context.sync();
 
-      if (results.items.length === 0) continue;
+      if (results.items.length === 0) {
+        continue;
+      }
 
       const range = results.items[0];
 
       if (Array.isArray(value)) {
-        // Table replacement
-        const rows = [];
-        const cols = columns || (value.length > 0 ? Object.keys(value[0]) : []);
+        // Value is a table
+        const cols = columns || Object.keys(value[0] || {});
+        const rowCount = value.length + 1; // +1 for header
+        const colCount = cols.length;
 
-        // Add header row
-        rows.push(cols.map((col) => col));
+        const table = range.insertTable(rowCount, colCount, Word.InsertLocation.replace, []);
+        table.style = "Grid Table 5 Dark - Accent 1";
 
-        // Add data rows
-        for (const row of value) {
-          rows.push(cols.map((col) => row[col] ?? ""));
+        // Header
+        for (let c = 0; c < colCount; c++) {
+          table.getCell(0, c).value = cols[c];
         }
 
-        // Insert table
-        const table = range.insertTable(rows.length, cols.length, Word.InsertLocation.replace, rows);
-        table.styleBuiltIn = Word.BuiltInStyle.gridTable5Dark_Accent1;
+        // Data rows
+        for (let r = 0; r < value.length; r++) {
+          for (let c = 0; c < colCount; c++) {
+            const cellValue = value[r][cols[c]] ?? "";
+            table.getCell(r + 1, c).value = cellValue.toString();
+          }
+        }
       } else {
         // Plain text
         range.insertText(value.toString(), Word.InsertLocation.replace);
