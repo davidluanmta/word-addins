@@ -15,8 +15,8 @@ var selectedFields = []; // Store selected item globally
 var selectedColumns = []; // Store selected item globally
 
 let isTable = false;
-// const webServer = "https://localhost:8081";
-const webServer = "https://report-api.ueh.edu.vn";
+// const webServer = "https://localhost:8081/api/Suggestion";
+const webServer = "https://report-api.ueh.edu.vn/api/Suggestion";
 let token = ""; // Set this from user input if needed
 async function showSuggestions() {
   clearTimeout(debounceTimeout);
@@ -32,16 +32,13 @@ async function showSuggestions() {
     if (input.length < 2) return;
 
     try {
-      const response = await fetch(
-        `${webServer}/api/Suggestion/Query?year=${year}&query=${encodeURIComponent(input)}`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      const response = await fetch(`${webServer}/Query?year=${year}&query=${encodeURIComponent(input)}`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
 
       if (!response.ok) {
         $("#notification-body").html("Failed to fetch suggestions");
@@ -65,6 +62,7 @@ async function showSuggestions() {
             } else {
               $(".table-columns").hide();
               selectedColumns = [];
+              isTable = false;
             }
           });
 
@@ -84,7 +82,7 @@ async function showSuggestions() {
 async function fetchTableColumn(id) {
   const token = $("#apiToken").val().trim();
 
-  const response = await fetch(`${webServer}/api/Suggestion/FetchTableInfo?id=${id}`, {
+  const response = await fetch(`${webServer}/FetchTableInfo?id=${id}`, {
     method: "GET",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -119,6 +117,101 @@ async function fetchTableColumn(id) {
   });
 }
 
+async function getSelectedFromApi(ids) {
+  const response = await fetch(webServer + "/FetchSelected", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids }),
+  });
+
+  const json = await response.json();
+  if (json.code === 200 && json.data) {
+    return json.data;
+  }
+
+  return {};
+}
+async function fillAllPlaceholdersBatch(callApi) {
+  await Word.run(async (context) => {
+    const body = context.document.body;
+    // Step 1: Insert "Đang xử lý..." message at the beginning
+    const loadingControl = body.insertParagraph("Đang xử lý dữ liệu, vui lòng chờ...", Word.InsertLocation.start);
+    const loadingContentControl = loadingControl.insertContentControl();
+    loadingContentControl.tag = "loading-status";
+    loadingContentControl.title = "Trạng thái";
+    loadingContentControl.appearance = "BoundingBox";
+
+    await context.sync();
+    // Step 2: Load document text and find placeholders
+    body.load("text");
+    const fullText = body.text;
+
+    // Match patterns like: {{1718_HopDongGiangVien["Stt","HoVaTen"]}} or {{1710_SoLuongGiangVien}}
+    const regex = /\{\{(\d+)_([\w.]+)(?:\s*\[(.*?)\])?\}\}/g;
+    const matches = Array.from(fullText.matchAll(regex));
+
+    const placeholders = [];
+    const idsSet = new Set();
+
+    for (const match of matches) {
+      const full = match[0];
+      const id = match[1];
+      const rawCols = match[3];
+
+      const columns = rawCols ? rawCols.split(",").map((c) => c.trim().replace(/^"|"$/g, "")) : null;
+
+      placeholders.push({ full, id, columns });
+      idsSet.add(id);
+    }
+
+    const ids = Array.from(idsSet);
+    const dataMap = await callApi(ids); // Make single API call
+
+    //Step 3: Replace each placeholder
+    for (const { full, id, columns } of placeholders) {
+      const value = dataMap[id];
+      if (!value) continue;
+
+      let html = "";
+
+      if (Array.isArray(value)) {
+        // Value is a table
+        const cols = columns || Object.keys(value[0] || {});
+        html = "<table border='1'><tr>";
+        cols.forEach((col) => {
+          html += `<th>${col}</th>`;
+        });
+        html += "</tr>";
+
+        value.forEach((row) => {
+          html += "<tr>";
+          cols.forEach((col) => {
+            html += `<td>${row[col] ?? ""}</td>`;
+          });
+          html += "</tr>";
+        });
+
+        html += "</table>";
+      } else {
+        // Value is plain text
+        html = `<p>${value}</p>`;
+      }
+
+      const results = body.search(full, { matchCase: false, matchWholeWord: false });
+      context.load(results, "items");
+      await context.sync();
+
+      if (results.items.length > 0) {
+        results.items[0].insertHtml(html, Word.InsertLocation.replace);
+        await context.sync();
+      }
+    }
+    //Step 4: Remove loading message
+    loadingContentControl.delete(true);
+    await context.sync();
+  });
+}
+
 async function insertPlaceholder() {
   let input = $("#placeholderInput").val();
   if (selectedFields.some((x) => x.name == input)) {
@@ -142,14 +235,5 @@ async function insertPlaceholder() {
 }
 
 async function performMailMerge() {
-  let input = $("#placeholderInput").val();
-  if (selectedFields.some((x) => x.name == input)) {
-    const temp = selectedFields.filter((x) => x.name == input);
-    console.log(temp);
-    await Word.run(async (context) => {
-      let selection = context.document.getSelection();
-      selection.insertText(temp[0].value, Word.InsertLocation.replace);
-      await context.sync();
-    });
-  }
+  await fillAllPlaceholdersBatch(callApi);
 }
