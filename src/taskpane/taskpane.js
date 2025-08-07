@@ -235,5 +235,5 @@ async function insertPlaceholder() {
 }
 
 async function performMailMerge() {
-  await fillAllPlaceholdersBatch(callApi);
+  await fillAllPlaceholdersBatch(getSelectedFromApi);
 }
