@@ -16,7 +16,7 @@ var selectedColumns = []; // Store selected item globally
 
 let isTable = false;
 // const webServer = "https://localhost:8081";
-const webServer = "https://report-api.ueh.edu.vn/";
+const webServer = "https://report-api.ueh.edu.vn";
 let token = ""; // Set this from user input if needed
 async function showSuggestions() {
   clearTimeout(debounceTimeout);
