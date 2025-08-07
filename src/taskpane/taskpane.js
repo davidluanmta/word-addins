@@ -201,6 +201,7 @@ async function fillAllPlaceholdersBatch(callApi) {
         await context.sync();
       }
     }
+    $("#notification-body").html("");
   });
 }
 
