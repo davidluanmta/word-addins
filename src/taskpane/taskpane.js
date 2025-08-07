@@ -135,15 +135,10 @@ async function fillAllPlaceholdersBatch(callApi) {
   await Word.run(async (context) => {
     const body = context.document.body;
     // Step 1: Insert "Đang xử lý..." message at the beginning
-    const loadingControl = body.insertParagraph("Đang xử lý dữ liệu, vui lòng chờ...", Word.InsertLocation.start);
-    const loadingContentControl = loadingControl.insertContentControl();
-    loadingContentControl.tag = "loading-status";
-    loadingContentControl.title = "Trạng thái";
-    loadingContentControl.appearance = "BoundingBox";
-
-    await context.sync();
+    $("#notification-body").html("Đang xử lý dữ liệu, vui lòng chờ...");
     // Step 2: Load document text and find placeholders
     body.load("text");
+    await context.sync();
     const fullText = body.text;
 
     // Match patterns like: {{1718_HopDongGiangVien["Stt","HoVaTen"]}} or {{1710_SoLuongGiangVien}}
@@ -206,9 +201,6 @@ async function fillAllPlaceholdersBatch(callApi) {
         await context.sync();
       }
     }
-    //Step 4: Remove loading message
-    loadingContentControl.delete(true);
-    await context.sync();
   });
 }
 
