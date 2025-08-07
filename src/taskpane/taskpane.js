@@ -132,88 +132,83 @@ async function getSelectedFromApi(ids) {
   return {};
 }
 async function fillAllPlaceholdersBatch(callApi) {
-  try {
-    await Word.run(async (context) => {
-      const body = context.document.body;
+  await Word.run(async (context) => {
+    const body = context.document.body;
 
-      // 1. Hiển thị thông báo
-      $("#notification-body").html("Đang xử lý dữ liệu, vui lòng chờ...");
+    $("#notification-body").html("Đang xử lý dữ liệu, vui lòng chờ...");
 
-      // 2. Tải nội dung văn bản
-      body.load("text");
-      await context.sync();
-      const fullText = body.text;
+    body.load("text");
+    await context.sync();
+    const fullText = body.text;
 
-      // 3. Tìm các placeholder dạng {{1718_HopDongGiangVien["Stt","HoVaTen"]}}
-      const regex = /\{\{(\d+)_([\w.]+)(?:\s*\[(.*?)\])?\}\}/g;
-      const matches = Array.from(fullText.matchAll(regex));
+    const regex = /\{\{(\d+)_([\w.]+)(?:\s*\[(.*?)\])?\}\}/g;
+    const matches = Array.from(fullText.matchAll(regex));
 
-      const placeholders = [];
-      const idsSet = new Set();
+    const placeholders = [];
+    const idsSet = new Set();
 
-      for (const match of matches) {
-        const full = match[0];
-        const id = match[1];
-        const rawCols = match[3];
+    for (const match of matches) {
+      const full = match[0];
+      const id = match[1];
+      const rawCols = match[3];
+      const columns = rawCols ? rawCols.split(",").map((c) => c.trim().replace(/^"|"$/g, "")) : null;
 
-        const columns = rawCols ? rawCols.split(",").map((c) => c.trim().replace(/^"|"$/g, "")) : null;
-
-        placeholders.push({ full, id, columns });
-        idsSet.add(id);
-      }
-
-      if (placeholders.length === 0) {
-        $("#notification-body").html("Không tìm thấy dữ liệu cần thay thế.");
-        return;
-      }
-
-      // 4. Gọi API lấy dữ liệu theo id
-      const ids = Array.from(idsSet);
-      const dataMap = await callApi(ids);
-
-      // 5. Thay thế từng placeholder
-      for (const { full, id, columns } of placeholders) {
-        const value = dataMap[id];
-        if (!value) continue;
-
-        const results = body.search(full, { matchCase: false, matchWholeWord: false });
-        context.load(results, "items");
-        await context.sync();
-
-        if (results.items.length === 0) continue;
-
-        const range = results.items[0];
-
-        // 6. Nếu là bảng
-        if (Array.isArray(value)) {
-          const cols = columns && columns.length > 0 ? columns : Object.keys(value[0] || {});
-
-          const rowCount = value.length + 1;
-          const colCount = cols.length;
-
-          if (rowCount > 1 && colCount > 0) {
-            const tableValues = [cols, ...value.map((row) => cols.map((col) => row[col] ?? ""))];
-            range.insertTable(rowCount, colCount, Word.InsertLocation.replace, tableValues);
-            await context.sync();
-          }
-        } else {
-          // 7. Nếu là chuỗi văn bản
-          range.insertHtml(`<p>${value}</p>`, Word.InsertLocation.replace);
-          await context.sync();
-        }
-      }
-
-      // 8. Xóa thông báo
-      $("#notification-body").html("");
-    });
-  } catch (error) {
-    console.error("❌ Lỗi khi xử lý Word:", error);
-    if (error instanceof OfficeExtension.Error) {
-      console.error("📄 Chi tiết lỗi:", JSON.stringify(error.debugInfo, null, 2));
-      alert("Lỗi: " + error.message + "\nChi tiết: " + JSON.stringify(error.debugInfo, null, 2));
+      placeholders.push({ full, id, columns });
+      idsSet.add(id);
     }
-    $("#notification-body").html("Đã xảy ra lỗi khi xử lý dữ liệu.");
-  }
+
+    const ids = Array.from(idsSet);
+    const dataMap = await callApi(ids);
+
+    for (const { full, id, columns } of placeholders) {
+      const value = dataMap[id];
+      if (!value) continue;
+
+      const results = body.search(full, { matchCase: false, matchWholeWord: false });
+      context.load(results, "items");
+      await context.sync();
+
+      if (results.items.length === 0) continue;
+
+      const range = results.items[0];
+
+      if (Array.isArray(value)) {
+        if (value.length === 0) continue;
+
+        // Determine columns
+        const cols = columns && columns.length > 0 ? columns : Object.keys(value[0]);
+
+        if (cols.length === 0) continue;
+
+        // Build table data: first row is header
+        const tableValues = [cols];
+        for (const row of value) {
+          const rowValues = cols.map((col) => (row[col] ?? "").toString());
+          tableValues.push(rowValues);
+        }
+
+        const rowCount = tableValues.length;
+        const colCount = cols.length;
+
+        try {
+          range.insertTable(rowCount, colCount, Word.InsertLocation.replace, tableValues);
+          await context.sync();
+        } catch (e) {
+          console.error("❌ Error inserting table for", full, e, {
+            rowCount,
+            colCount,
+            tableValues,
+          });
+        }
+      } else {
+        // Plain text value
+        range.insertText(value.toString(), Word.InsertLocation.replace);
+        await context.sync();
+      }
+    }
+
+    $("#notification-body").html("");
+  });
 }
 
 async function insertPlaceholder() {
