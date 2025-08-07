@@ -186,7 +186,6 @@ async function fillAllPlaceholdersBatch(callApi) {
         const colCount = cols.length;
 
         const table = range.insertTable(rowCount, colCount, Word.InsertLocation.replace, []);
-        table.style = "Grid Table 5 Dark - Accent 1";
 
         // Header
         for (let c = 0; c < colCount; c++) {
