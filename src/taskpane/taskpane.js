@@ -181,23 +181,30 @@ async function fillAllPlaceholdersBatch(callApi) {
         const range = results.items[0];
 
         if (Array.isArray(value)) {
-          // Value is a table
-          const cols = columns || Object.keys(value[0] || {});
-          const rowCount = value.length + 1; // +1 for header
-          const colCount = cols.length;
+          // Là bảng
+          if (value.length === 0) {
+            range.insertText("(Không có dữ liệu)", Word.InsertLocation.replace);
+            continue;
+          }
 
-          const table = range.insertTable(rowCount, colCount, Word.InsertLocation.replace, []);
+          const allKeys = Object.keys(value[0] || {});
+          const usedColumns = columns && columns.length > 0 ? columns : allKeys;
+          const rowCount = value.length + 1;
+          const colCount = usedColumns.length;
 
-          // Header
+          const table = range.insertTable(rowCount, colCount, Word.InsertLocation.replace);
+
+          // Header row
           for (let c = 0; c < colCount; c++) {
-            table.getCell(0, c).value = cols[c];
+            table.getCell(0, c).value = usedColumns[c];
           }
 
           // Data rows
           for (let r = 0; r < value.length; r++) {
+            const row = value[r];
             for (let c = 0; c < colCount; c++) {
-              const cellValue = value[r][cols[c]] ?? "";
-              table.getCell(r + 1, c).value = cellValue.toString();
+              const cellValue = row[usedColumns[c]];
+              table.getCell(r + 1, c).value = cellValue != null ? cellValue.toString() : "";
             }
           }
         } else {
